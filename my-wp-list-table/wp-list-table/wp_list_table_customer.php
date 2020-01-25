@@ -15,10 +15,6 @@ class MyWpListTableCustomer extends WP_List_Table{
      */
     public function prepare_items(){
 
-       
-        $columns  = $this->get_columns();
-        $hidden   = $this->get_hidden_columns();
-        $sortable = $this->get_sortable_columns();
         $per_page = $this->get_items_per_page( 'customer_list_per_page', 5 );
 
         $this->process_bulk_action();
@@ -30,8 +26,13 @@ class MyWpListTableCustomer extends WP_List_Table{
         if( $user_search_key ) { 
             $data = $this->filter_table_data( $data, $user_search_key );
         }
-    
-        $this->_column_headers = array($columns, $hidden, $sortable);
+        
+        /*$columns  = $this->get_columns();
+        $hidden   = $this->get_hidden_columns();
+        $sortable = $this->get_sortable_columns();
+        $this->_column_headers = array($columns, $hidden, $sortable);*/
+
+        $this->_column_headers = $this->get_column_info();
 
         //Paginate
         $table_page = $this->get_pagenum();     
@@ -69,37 +70,75 @@ class MyWpListTableCustomer extends WP_List_Table{
      * @return array
      */
     public function get_bulk_actions() {
-        $actions = [
-            'bulk-delete' => 'Delete'
-        ];
+
+        $current = ( !empty($_REQUEST['customer_status']) ? $_REQUEST['customer_status'] : 'all');
+
+        if ( 'trash' === $current ) {
+            $actions = [
+            'bulk-untrash' => 'Restore',
+            'bulk-delete' => 'Delete Permanently'
+            ];
+
+        }else{
+            $actions = [
+            'bulk-trash' => 'Trash'
+            ];
+        }
+        
 
         return $actions;
     }
 
-    public function process_bulk_action() {
+    public function process_bulk_action() { 
 
-        //Detect when a bulk action is being triggered...
-        if ( 'delete' === $this->current_action() ) {
+        if ( 'trash' === $this->current_action() ) {
 
-            // In our file that handles the request, verify the nonce.
             $nonce = esc_attr( $_REQUEST['_wpnonce'] );
 
-            if ( ! wp_verify_nonce( $nonce, 'sp_delete_customer' ) ) {
+            if ( ! wp_verify_nonce( $nonce, 'sp_nonce_customer' ) ) {
                 die( 'Go get a life script kiddies' );
             }
             else {
-                self::delete_customer( absint( $_GET['customer'] ) );
-
-                        // esc_url_raw() is used to prevent converting ampersand in url to "#038;"
-                        // add_query_arg() return the current url
-                        //wp_redirect( esc_url_raw(add_query_arg()) );
-
-                        $pp = admin_url().'admin.php?page=my-wp-list-table';
-                        wp_redirect($pp);
+                self::set_status_customer( absint( $_GET['customer']), 'trash' );
+                $pp = admin_url().'admin.php?page=my-wp-list-table';
+                wp_redirect($pp);
                 exit;
             }
 
         }
+
+        if ( 'untrash' === $this->current_action() ) {
+
+            $nonce = esc_attr( $_REQUEST['_wpnonce'] );
+
+            if ( ! wp_verify_nonce( $nonce, 'sp_nonce_customer' ) ) {
+                die( 'Go get a life script kiddies' );
+            }
+            else {
+                self::set_status_customer( absint( $_GET['customer']), 'publish' );
+                $pp = admin_url().'admin.php?page=my-wp-list-table';
+                wp_redirect($pp);
+                exit;
+            }
+
+        }
+
+        if ( 'delete' === $this->current_action() ) {
+
+            $nonce = esc_attr( $_REQUEST['_wpnonce'] );
+
+            if ( ! wp_verify_nonce( $nonce, 'sp_nonce_customer' ) ) {
+                die( 'Go get a life script kiddies' );
+            }
+            else {
+                self::delete_customer( absint( $_GET['customer'] ) );
+                $pp = admin_url().'admin.php?page=my-wp-list-table';
+                wp_redirect($pp);
+                exit;
+            }
+
+        }
+
 
         // If the delete bulk action is triggered
         if ( ( isset( $_POST['action'] ) && $_POST['action'] == 'bulk-delete' )
@@ -108,17 +147,44 @@ class MyWpListTableCustomer extends WP_List_Table{
 
             $delete_ids = esc_sql( $_POST['bulk-delete'] );
 
-            // loop over the array of record IDs and delete them
             foreach ( $delete_ids as $id ) {
                 self::delete_customer( $id );
-
+                //self::set_status_customer( $id, 'trash' );
             }
-
-            // esc_url_raw() is used to prevent converting ampersand in url to "#038;"
-                // add_query_arg() return the current url
-                wp_redirect( esc_url_raw(add_query_arg()) );
+            wp_redirect( esc_url_raw(add_query_arg()) );
             exit;
         }
+
+        if ( ( isset( $_POST['action'] ) && $_POST['action'] == 'bulk-trash' )
+             || ( isset( $_POST['action2'] ) && $_POST['action2'] == 'bulk-trash' )
+        ) {
+
+            $delete_ids = esc_sql( $_POST['bulk-delete'] );
+
+            foreach ( $delete_ids as $id ) {
+                //self::delete_customer( $id );
+                self::set_status_customer( $id, 'trash' );
+            }
+            wp_redirect( esc_url_raw(add_query_arg()) );
+            exit;
+        }
+
+        if ( ( isset( $_POST['action'] ) && $_POST['action'] == 'bulk-untrash' )
+             || ( isset( $_POST['action2'] ) && $_POST['action2'] == 'bulk-untrash' )
+        ) {
+
+            $delete_ids = esc_sql( $_POST['bulk-delete'] );
+
+            foreach ( $delete_ids as $id ) {
+                //self::delete_customer( $id );
+                self::set_status_customer( $id, 'publish' );
+            }
+            wp_redirect( esc_url_raw(add_query_arg()) );
+            exit;
+        }
+
+
+        
     }
 
 
@@ -132,6 +198,23 @@ class MyWpListTableCustomer extends WP_List_Table{
         );
     }
 
+    public static function set_status_customer( $id, $status) {
+
+        global $wpdb;
+
+        $wpdb->update( 
+           "{$wpdb->prefix}customers",
+            array( 
+                'status' => $status, 
+            ), 
+            array( 'ID' => $id ), 
+            array( 
+                '%s',
+            ), 
+            array( '%d' ) 
+            );
+        }
+
 
     /**
      * Get the table data
@@ -140,14 +223,24 @@ class MyWpListTableCustomer extends WP_List_Table{
      */
     private function table_data(){
 
+
         global $wpdb;
 
         $sql = "SELECT * FROM {$wpdb->prefix}customers";
+
+        $customer_status = ( isset($_REQUEST['customer_status']) ? $_REQUEST['customer_status'] : 'publish');
+        if($customer_status != '') {
+            $sql .= " WHERE status LIKE '" .$customer_status. "'";
+        } else  {
+            $sql .= '';
+        }
 
         if ( ! empty( $_REQUEST['orderby'] ) ) { 
             $sql .= ' ORDER BY ' . esc_sql( $_REQUEST['orderby'] );
             $sql .= ! empty( $_REQUEST['order'] ) ? ' ' . esc_sql( $_REQUEST['order'] ) : ' ASC';
         }
+
+        //echo $sql;
 
         $result = $wpdb->get_results( $sql, 'ARRAY_A' );
 
@@ -190,7 +283,6 @@ class MyWpListTableCustomer extends WP_List_Table{
 
     }
 
-
     /**
      * Define what data to show on each column of the table
      *
@@ -218,14 +310,33 @@ class MyWpListTableCustomer extends WP_List_Table{
     */
     public function column_name( $item ) {
 
-        $delete_nonce = wp_create_nonce( 'sp_delete_customer' );
+        $sp_nonce_customer = wp_create_nonce( 'sp_nonce_customer' );
 
         $title = '<strong>' . $item['name'] . '</strong>';
 
-        $actions = [
-            'edit' => sprintf( '<a href="?page=%s&action=%s&customer=%s&_wpnonce=%s">Edit</a>', esc_attr( $_REQUEST['page'] ), 'edit', absint( $item['ID'] ), $delete_nonce ),
-            'delete' => sprintf( '<a href="?page=%s&action=%s&customer=%s&_wpnonce=%s">Delete</a>', esc_attr( $_REQUEST['page'] ), 'delete', absint( $item['ID'] ), $delete_nonce )
-        ];
+        $current = ( !empty($_REQUEST['customer_status']) ? $_REQUEST['customer_status'] : 'all');
+
+        if ($current == 'trash') {
+
+            $actions = [
+                'edit' => sprintf( '<a href="?page=%s&action=%s&customer=%s&_wpnonce=%s">Restore</a>', esc_attr( $_REQUEST['page'] ), 'untrash', absint( $item['ID'] ), $sp_nonce_customer ),
+                'delete' => sprintf( '<a href="?page=%s&action=%s&customer=%s&_wpnonce=%s">Delete Permanently</a>', esc_attr( $_REQUEST['page'] ), 'delete', absint( $item['ID'] ), $sp_nonce_customer )
+            ];
+           
+        }else if($current == 'all'){
+
+            $actions = [
+                'edit' => sprintf( '<a href="?page=%s&action=%s&customer=%s&_wpnonce=%s">Edit</a>', esc_attr( $_REQUEST['page'] ), 'edit', absint( $item['ID'] ), $sp_nonce_customer ),
+                'trash' => sprintf( '<a href="?page=%s&action=%s&customer=%s&_wpnonce=%s">Trash</a>', esc_attr( $_REQUEST['page'] ), 'trash', absint( $item['ID'] ), $sp_nonce_customer )
+            ];
+
+
+        }else{
+
+            //
+        }
+
+        
 
         return $title . $this->row_actions( $actions );
     }
@@ -269,4 +380,27 @@ class MyWpListTableCustomer extends WP_List_Table{
         }
         return -$result;
     }
+
+
+
+    protected function get_views() { 
+      $views = array();
+       $current = ( !empty($_REQUEST['customer_status']) ? $_REQUEST['customer_status'] : 'all');
+
+       //All link
+       $class = ($current == 'all' ? ' class="current"' :'');
+       $all_url = remove_query_arg('customer_status');
+       $views['all'] = "<a href='{$all_url }' {$class} >All</a>";
+
+       //Trash link
+       $trash = add_query_arg('customer_status','trash');
+       $class = ($current == 'trash' ? ' class="current"' :'');
+       $views['trash'] = "<a href='{$trash}' {$class} >Trash</a>";
+
+       return $views;
+    }
+
 }
+
+
+

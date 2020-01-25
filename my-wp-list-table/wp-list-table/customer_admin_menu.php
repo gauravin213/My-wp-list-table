@@ -15,7 +15,6 @@ function my_wp_list_table_customer_admin_menu_page_fun(){
 function my_wp_list_table_customer_admin_menu_fun(){
 ?>
     <div class="wrap">
-        <a href="http://127.0.0.1/wordpress521/wp-admin/admin.php?page=my-wp-list-table&action=add">Add</a>
         <?php
             global $wpdb;
 
@@ -73,10 +72,15 @@ function my_wp_list_table_customer_admin_menu_fun(){
 
                 $exampleListTable = new MyWpListTableCustomer();
                 ?>
-                <h2>List</h2>
+
+                <h1 class="wp-heading-inline">Customer</h1>
+                <a href="<?php echo admin_url();?>admin.php?page=my-wp-list-table&action=add" class="page-title-action">Add New</a>
+                <hr class="wp-header-end">
+
                 <form method="post">
                     <?php
                     $exampleListTable->prepare_items();
+                    $exampleListTable->views();
                     $exampleListTable->search_box("Search Post(s)", "search_post_id");
                     $exampleListTable->display(); 
                     ?>
@@ -86,13 +90,37 @@ function my_wp_list_table_customer_admin_menu_fun(){
             }
         ?>
     </div>
+    <div class="clear"></div>
 <?php
 }
 
 
+function my_wp_list_table_customer_add_option() {
+
+    $option = 'per_page';
+ 
+	$args = array(
+	    'label' => 'Customer',
+	    'default' => 10,
+	    'option' => 'customer_list_per_page'
+	);
+	 
+	add_screen_option( $option, $args );
+
+    $exampleListTable = new MyWpListTableCustomer();
+
+}
 
 
-
+add_filter('set-screen-option', 'my_wp_list_table_customer_set_option', 10, 3);
+ 
+function my_wp_list_table_customer_set_option($status, $option, $value) {
+ 
+    if ( 'customer_list_per_page' == $option ) return $value;
+ 
+    return $status;
+ 
+}
 
 
 add_action('admin_post_my_wp_list_table_customer_Form_Action', 'my_wp_list_table_customer_Form_Action');
@@ -108,12 +136,14 @@ function my_wp_list_table_customer_Form_Action(){
             array( 
                 'name' => $_POST['name'], 
                 'address' => $_POST['address'],
-                'city' => $_POST['city']
+                'city' => $_POST['city'],
+                'status' => 'publish' 
                 ), 
             array( 
                 '%s',   
                 '%s',
-                '%s'    
+                '%s',
+                '%s'     
             )
         ); 
 
@@ -152,34 +182,4 @@ function my_wp_list_table_customer_Form_Action(){
     die();
 
 
-}
-
-
-
-
-
-
-function my_wp_list_table_customer_add_option() {
-
-   $option = 'per_page';
- 
-	$args = array(
-	    'label' => 'Movies',
-	    'default' => 10,
-	    'option' => 'customer_list_per_page'
-	);
-	 
-	add_screen_option( $option, $args );
-
-}
-
-
-add_filter('set-screen-option', 'my_wp_list_table_customer_set_option', 10, 3);
- 
-function my_wp_list_table_customer_set_option($status, $option, $value) {
- 
-    if ( 'customer_list_per_page' == $option ) return $value;
- 
-    return $status;
- 
 }
