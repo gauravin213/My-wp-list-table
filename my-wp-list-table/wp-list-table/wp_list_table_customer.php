@@ -1,17 +1,13 @@
 <?php
 
-// WP_List_Table is not loaded automatically so we need to load it in our application
+//MyWpListTable{table_name} like MyWpListTableCustomer
+
 if( ! class_exists( 'WP_List_Table' ) ) {
     require_once( ABSPATH . 'wp-admin/includes/class-wp-list-table.php' );
 }
-/**
- * Create a new table class that will extend the WP_List_Table
- */
-
-//MyWpListTable{table_name} like MyWpListTableCustomer
-
 
 class MyWpListTableCustomer extends WP_List_Table{
+    
     /**
      * Prepare the items for the table to process
      *
@@ -19,43 +15,53 @@ class MyWpListTableCustomer extends WP_List_Table{
      */
     public function prepare_items(){
 
-        $orderby = isset($_GET['orderby']) ? trim($_GET['orderby']) : "";
-        $order = isset($_GET['order']) ? trim($_GET['order']) : "";
-        $search_term = isset($_POST['s']) ? trim($_POST['s']) : "";
-
-
-        $columns = $this->get_columns();
-        $hidden = $this->get_hidden_columns();
+       
+        $columns  = $this->get_columns();
+        $hidden   = $this->get_hidden_columns();
         $sortable = $this->get_sortable_columns();
+        $per_page = $this->get_items_per_page( 'customer_list_per_page', 5 );
 
-        $per_page     = $this->get_items_per_page( 'customer_list_per_page', 5 );
-        $currentPage = $this->get_pagenum();
-
-
-
-        $data = $this->table_data($per_page);
-
-        usort( $data, array( &$this, 'sort_data' ) );
-
-        $totalItems = count($data);
-
-        $this->set_pagination_args( array(
-            'total_items' => $totalItems,
-            'per_page'    => $perPage
-        ) );
-
-        $data = array_slice($data,(($currentPage-1)*$perPage),$perPage);
-
-        /** Process bulk action */
         $this->process_bulk_action();
 
+        $data = $this->table_data();
+       
+        //search box
+        $user_search_key = isset( $_REQUEST['s'] ) ? wp_unslash( trim( $_REQUEST['s'] ) ) : '';
+        if( $user_search_key ) { 
+            $data = $this->filter_table_data( $data, $user_search_key );
+        }
+    
         $this->_column_headers = array($columns, $hidden, $sortable);
 
-         
-
-        $this->items = $data;
+        //Paginate
+        $table_page = $this->get_pagenum();     
+        $this->items = array_slice( $data, ( ( $table_page - 1 ) * $per_page ), $per_page );
+        $totalItems = count( $data );
+        $this->set_pagination_args( array (
+            'total_items' => $totalItems,
+            'per_page'    => $per_page,
+            'total_pages' => ceil( $totalItems/$per_page )
+        ) );
 
     }
+
+
+
+    //
+    // filter the table data based on the search key
+    public function filter_table_data( $table_data, $search_key ) {
+        $filtered_table_data = array_values( array_filter( $table_data, function( $row ) use( $search_key ) {
+            foreach( $row as $row_val ) {
+                if( stripos( $row_val, $search_key ) !== false ) {
+                    return true;
+                }               
+            }           
+        } ) );
+
+        return $filtered_table_data;
+
+    }
+    //
 
     /**
      * Returns an associative array containing the bulk action
@@ -86,7 +92,10 @@ class MyWpListTableCustomer extends WP_List_Table{
 
                         // esc_url_raw() is used to prevent converting ampersand in url to "#038;"
                         // add_query_arg() return the current url
-                        wp_redirect( esc_url_raw(add_query_arg()) );
+                        //wp_redirect( esc_url_raw(add_query_arg()) );
+
+                        $pp = admin_url().'admin.php?page=my-wp-list-table';
+                        wp_redirect($pp);
                 exit;
             }
 
@@ -124,36 +133,27 @@ class MyWpListTableCustomer extends WP_List_Table{
     }
 
 
-
     /**
      * Get the table data
      *
      * @return Array
      */
-    private function table_data($per_page){
+    private function table_data(){
 
-    	
-    	global $wpdb;
+        global $wpdb;
 
-		$sql = "SELECT * FROM {$wpdb->prefix}customers ORDER BY ID DESC";
+        $sql = "SELECT * FROM {$wpdb->prefix}customers";
 
-		if ( ! empty( $_REQUEST['orderby'] ) ) { 
-			$sql .= ' ORDER BY ' . esc_sql( $_REQUEST['orderby'] );
-			$sql .= ! empty( $_REQUEST['order'] ) ? ' ' . esc_sql( $_REQUEST['order'] ) : ' ASC';
-		}
+        if ( ! empty( $_REQUEST['orderby'] ) ) { 
+            $sql .= ' ORDER BY ' . esc_sql( $_REQUEST['orderby'] );
+            $sql .= ! empty( $_REQUEST['order'] ) ? ' ' . esc_sql( $_REQUEST['order'] ) : ' ASC';
+        }
 
-		$sql .= " LIMIT $per_page";
-		//$sql .= ' OFFSET ' . ( $page_number - 1 ) * $per_page;
+        $result = $wpdb->get_results( $sql, 'ARRAY_A' );
 
-		$result = $wpdb->get_results( $sql, 'ARRAY_A' );
-
-		//echo "<pre>"; print_r($result); echo "</pre>";
         return $result;
 
     }
-
-
-
 
 
     public function column_cb( $item ) {
