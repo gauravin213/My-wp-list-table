@@ -400,6 +400,55 @@ class MyWpListTableCustomer extends WP_List_Table{
        return $views;
     }
 
+
+    function extra_tablenav( $which ) {
+        global $wpdb, $testiURL, $tablename, $tablet;
+        $move_on_url = '&cat-filter=';
+        if ( $which == "top" ){  
+            ?>
+            <div class="alignleft actions bulkactions">
+            <?php
+            $cats = $wpdb->get_results('select * from wp_customers', ARRAY_A);
+            if( $cats ){
+                ?>
+                <select name="cat-filter" class="ewc-filter-cat">
+                    <option value="">Filter by Category</option>
+                    <?php
+                    foreach( $cats as $cat ){
+                        $selected = '';
+                        if( $_GET['cat-filter'] == $cat['ID'] ){
+                            $selected = ' selected = "selected"';   
+                        }
+    
+                    ?>
+                    <option value="<?php echo $move_on_url . $cat['ID']; ?>" <?php echo $selected; ?>><?php echo $cat['name']; ?></option>
+                    <?php   
+                      
+                    }
+                    ?>
+                </select>
+
+                <script type="text/javascript">
+                    /*jQuery('.ewc-filter-cat').live('change', function(){
+                        var catFilter = jQuery(this).val();
+                        if( catFilter != '' ){
+                            document.location.href = 'admin.php?page=ewc-testimonial'+catFilter;    
+                        }
+                    });*/
+                </script>
+                <?php   
+            }
+            ?>  
+            </div>
+            <?php
+        }
+        if ( $which == "bottom" ){
+            //The code that goes after the table is there
+
+        }
+    }
+
+
 }
 
 
